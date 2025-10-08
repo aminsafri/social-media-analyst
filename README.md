@@ -24,7 +24,7 @@ A fully automated data warehouse that:
 ![Architecture Diagram](architecture/Architecture.png)
 
 - **Data Pipeline**
-![Data Pipeline](step-functions\stepfunctions_graph.png)
+![Data Pipeline](step-functions/stepfunctions_graph.png)
 
 ### Technology Stack
 
