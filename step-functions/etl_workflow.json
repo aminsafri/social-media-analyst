@@ -1,0 +1,141 @@
+{
+  "Comment": "Social Media Data Warehouse ETL Workflow",
+  "StartAt": "ParallelExtraction",
+  "States": {
+    "ParallelExtraction": {
+      "Type": "Parallel",
+      "Next": "WaitForExtraction",
+      "Branches": [
+        {
+          "StartAt": "ExtractRedditData",
+          "States": {
+            "ExtractRedditData": {
+              "Type": "Task",
+              "Resource": "arn:aws:lambda:us-east-1:847673610823:function:reddit-data-extractor",
+              "End": true,
+              "Retry": [
+                {
+                  "ErrorEquals": [
+                    "States.ALL"
+                  ],
+                  "IntervalSeconds": 60,
+                  "MaxAttempts": 2,
+                  "BackoffRate": 2
+                }
+              ]
+            }
+          }
+        },
+        {
+          "StartAt": "ExtractNewsData",
+          "States": {
+            "ExtractNewsData": {
+              "Type": "Task",
+              "Resource": "arn:aws:lambda:us-east-1:847673610823:function:news-data-extractor",
+              "End": true,
+              "Retry": [
+                {
+                  "ErrorEquals": [
+                    "States.ALL"
+                  ],
+                  "IntervalSeconds": 60,
+                  "MaxAttempts": 2,
+                  "BackoffRate": 2
+                }
+              ]
+            }
+          }
+        },
+        {
+          "StartAt": "ExtractCryptoData",
+          "States": {
+            "ExtractCryptoData": {
+              "Type": "Task",
+              "Resource": "arn:aws:lambda:us-east-1:847673610823:function:crypto-data-extractor",
+              "End": true,
+              "Retry": [
+                {
+                  "ErrorEquals": [
+                    "States.ALL"
+                  ],
+                  "IntervalSeconds": 60,
+                  "MaxAttempts": 2,
+                  "BackoffRate": 2
+                }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    "WaitForExtraction": {
+      "Type": "Wait",
+      "Seconds": 30,
+      "Next": "RunGlueCrawler"
+    },
+    "RunGlueCrawler": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::aws-sdk:glue:startCrawler",
+      "Parameters": {
+        "Name": "social-media-crawler"
+      },
+      "Next": "WaitForCrawler",
+      "Catch": [
+        {
+          "ErrorEquals": [
+            "Glue.CrawlerRunningException"
+          ],
+          "Next": "WaitForCrawler"
+        }
+      ]
+    },
+    "WaitForCrawler": {
+      "Type": "Wait",
+      "Seconds": 120,
+      "Next": "RunGlueETL"
+    },
+    "RunGlueETL": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::glue:startJobRun.sync",
+      "Parameters": {
+        "JobName": "social-media-etl"
+      },
+      "Next": "LoadToRedshift",
+      "Retry": [
+        {
+          "ErrorEquals": [
+            "States.ALL"
+          ],
+          "IntervalSeconds": 60,
+          "MaxAttempts": 2,
+          "BackoffRate": 2
+        }
+      ]
+    },
+    "LoadToRedshift": {
+      "Type": "Task",
+      "Resource": "arn:aws:lambda:us-east-1:847673610823:function:load-to-redshift",
+      "Next": "SendSuccessNotification",
+      "Retry": [
+        {
+          "ErrorEquals": [
+            "States.ALL"
+          ],
+          "IntervalSeconds": 60,
+          "MaxAttempts": 2,
+          "BackoffRate": 2
+        }
+      ]
+    },
+    "SendSuccessNotification": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::sns:publish",
+      "Parameters": {
+        "TopicArn": "arn:aws:sns:us-east-1:847673610823:etl-notification",
+        "Subject": "ETL Pipeline Success",
+        "Message": "Social Media Data Warehouse ETL completed successfully"
+      },
+      "End": true
+    }
+  }
+}
